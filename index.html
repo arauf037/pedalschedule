@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Padel Tournament</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 10px; margin: 0; background: #f5f5f5; }
+    h2 { margin-top: 20px; }
+    .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .row { display: flex; justify-content: space-between; align-items: center; }
+    .row input { width: 40px; text-align: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
+    th { background: #333; color: white; }
+  </style>
+</head>
+<body>
+  <h1>🏆 Padel Tournament</h1>
+
+  <h2>Fixtures</h2>
+  <div id="fixtures"></div>
+
+  <h2>Standings</h2>
+  <table id="standings"></table>
+
+  <h2>Playoffs</h2>
+  <div id="playoffs"></div>
+
+  <h2>Final Standings</h2>
+  <table id="finalStandings"></table>
+
+  <!-- Firebase compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+  <script>
+    // 🔑 Replace with your Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyDYvq9eXpYplV4qp65G106LJfHaBoPF23o",
+  authDomain: "pedalschedule.firebaseapp.com",
+  databaseURL: "https://pedalschedule-default-rtdb.firebaseio.com",
+  projectId: "pedalschedule",
+  storageBucket: "pedalschedule.firebasestorage.app",
+  messagingSenderId: "46444074383",
+  appId: "1:46444074383:web:4351f250d95fac4378a7fa",
+  measurementId: "G-14CKBVRF1L"
+};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // ---- Fixtures rendering ----
+    function renderFixtures(data) {
+      const container = document.getElementById("fixtures");
+      container.innerHTML = "";
+      data.forEach((f, i) => {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `
+          <div class="row">
+            <span>${f.teamA} vs ${f.teamB}</span>
+            <input type="number" id="scoreA-${i}" value="${f.scoreA}">
+            <input type="number" id="scoreB-${i}" value="${f.scoreB}">
+            <button onclick="updateFixture(${i})">Save</button>
+          </div>
+          <div>Winner: ${f.winner || "-"}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updateFixture(i) {
+      db.ref("fixtures").once("value").then(snap => {
+        const fixtures = snap.val();
+        const f = fixtures[i];
+        f.scoreA = parseInt(document.getElementById("scoreA-"+i).value) || 0;
+        f.scoreB = parseInt(document.getElementById("scoreB-"+i).value) || 0;
+        f.winner = f.scoreA > f.scoreB ? f.teamA : (f.scoreB > f.scoreA ? f.teamB : "Draw");
+        db.ref("fixtures/"+i).set(f);
+        recalcStandings();
+      });
+    }
+
+    // ---- Standings calculation ----
+    function recalcStandings() {
+      db.ref("/").once("value").then(snap => {
+        const data = snap.val();
+        const standings = {};
+        data.standings.forEach(t => {
+          standings[t.team] = { team: t.team, wins: 0, losses: 0, points: 0, pointsFor: 0, pointsAgainst: 0 };
+        });
+
+        data.fixtures.forEach(f => {
+          if (f.scoreA === 0 && f.scoreB === 0) return;
+          const tA = standings[f.teamA];
+          const tB = standings[f.teamB];
+          tA.pointsFor += f.scoreA; tA.pointsAgainst += f.scoreB;
+          tB.pointsFor += f.scoreB; tB.pointsAgainst += f.scoreA;
+          if (f.scoreA > f.scoreB) { tA.wins++; tB.losses++; }
+          else if (f.scoreB > f.scoreA) { tB.wins++; tA.losses++; }
+        });
+
+        let updated = Object.values(standings).map(t => ({...t, points: t.wins*2}));
+        updated.sort((a,b) => b.wins-a.wins || (b.pointsFor-b.pointsAgainst) - (a.pointsFor-a.pointsAgainst));
+        db.ref("standings").set(updated).then(updatePlayoffs);
+      });
+    }
+
+    function renderStandings(data) {
+      const tbl = document.getElementById("standings");
+      tbl.innerHTML = "<tr><th>Rank</th><th>Team</th><th>W</th><th>L</th><th>Pts</th><th>PF</th><th>PA</th></tr>";
+      data.forEach((t,i) => {
+        tbl.innerHTML += `<tr><td>${i+1}</td><td>${t.team}</td><td>${t.wins}</td><td>${t.losses}</td><td>${t.points}</td><td>${t.pointsFor}</td><td>${t.pointsAgainst}</td></tr>`;
+      });
+    }
+
+    // ---- Playoffs & Finals ----
+    function updatePlayoffs() {
+      db.ref("standings").once("value").then(snap => {
+        const s = snap.val();
+        if (!s || s.length < 4) return;
+        const top2 = s.slice(0,2), bottom2 = s.slice(2,4);
+        const playoffs = [
+          { stage:"Qualifier", team1:top2[0].team, team2:top2[1].team, score1:0, score2:0, winner:"" },
+          { stage:"Eliminator 1", team1:bottom2[0].team, team2:bottom2[1].team, score1:0, score2:0, winner:"" },
+          { stage:"Eliminator 2", team1:"Loser of Qualifier", team2:"Winner of Eliminator 1", score1:0, score2:0, winner:"" },
+          { stage:"Final", team1:"Winner of Qualifier", team2:"Winner of Eliminator 2", score1:0, score2:0, winner:"" }
+        ];
+        db.ref("playoffs").set(playoffs);
+      });
+    }
+
+    function renderPlayoffs(data) {
+      const container = document.getElementById("playoffs");
+      container.innerHTML = "";
+      data.forEach((p,i) => {
+        const div = document.createElement("div");
+        div.className = "card";
+        div.innerHTML = `
+          <div><b>${p.stage}</b>: ${p.team1} vs ${p.team2}</div>
+          <input type="number" id="p1-${i}" value="${p.score1}"> 
+          <input type="number" id="p2-${i}" value="${p.score2}">
+          <button onclick="updatePlayoff(${i})">Save</button>
+          <div>Winner: ${p.winner||"-"}</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function updatePlayoff(i) {
+      db.ref("playoffs").once("value").then(snap => {
+        const playoffs = snap.val();
+        const p = playoffs[i];
+        p.score1 = parseInt(document.getElementById("p1-"+i).value)||0;
+        p.score2 = parseInt(document.getElementById("p2-"+i).value)||0;
+        if (p.score1>p.score2) p.winner=p.team1;
+        else if (p.score2>p.score1) p.winner=p.team2;
+        else p.winner="Draw";
+        db.ref("playoffs/"+i).set(p).then(updateFinalStandings);
+      });
+    }
+
+    function updateFinalStandings() {
+      db.ref("playoffs").once("value").then(snap => {
+        const p = snap.val(); if(!p) return;
+        const finals=[];
+        const q=p.find(x=>x.stage==="Qualifier"), e1=p.find(x=>x.stage==="Eliminator 1"), e2=p.find(x=>x.stage==="Eliminator 2"), f=p.find(x=>x.stage==="Final");
+        if(e1 && e1.winner){const loser=e1.team1===e1.winner?e1.team2:e1.team1; finals.push({rank:4,team:loser});}
+        if(e2 && e2.winner){const loser=e2.team1===e2.winner?e2.team2:e2.team1; finals.push({rank:3,team:loser});}
+        if(f && f.winner){const loser=f.team1===f.winner?f.team2:f.team1; finals.push({rank:2,team:loser}); finals.push({rank:1,team:f.winner});}
+        db.ref("finalStandings").set(finals);
+      });
+    }
+
+    function renderFinalStandings(data) {
+      const tbl=document.getElementById("finalStandings");
+      tbl.innerHTML="<tr><th>Rank</th><th>Team</th></tr>";
+      data.forEach(r=>{tbl.innerHTML+=`<tr><td>${r.rank}</td><td>${r.team}</td></tr>`});
+    }
+
+    // ---- Live Listeners ----
+    db.ref("fixtures").on("value", s=>renderFixtures(s.val()||[]));
+    db.ref("standings").on("value", s=>renderStandings(s.val()||[]));
+    db.ref("playoffs").on("value", s=>renderPlayoffs(s.val()||[]));
+    db.ref("finalStandings").on("value", s=>renderFinalStandings(s.val()||[]));
+  </script>
+</body>
+</html>
