@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padel Tournament Admin</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+body { background: #f8f9fa; font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";  }
+h1,h2 { text-align:center; margin:20px 0; }
+.card { border-radius: 1rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+.team-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; font-weight:600; color:#fff; }
+.team-A { background:#304d6d; }
+.team-B { background:#a67045; }
+.team-C { background:#a2ce3c; }
+.team-D { background:#198754; }
+.team-E { background:#d68a30; }
+.score-input { width:55px; text-align:center; }
+table th { background:#212529; color:#fff; }
+@media (max-width:576px) { .score-input { width:45px; font-size:0.9rem; } table th, table td { font-size:0.85rem; padding:4px; } }
+</style>
+</head>
+<body>
+<div class="container my-3">
+<h1>🏆 Padel Tournament Admin</h1>
+
+<h2>Fixtures</h2>
+<div id="fixtures" class="row gy-3"></div>
+
+<h2>Standings</h2>
+<div class="table-responsive">
+<table id="standings" class="table table-bordered table-striped table-sm"></table>
+</div>
+
+<!--
+<h2>Playoffs</h2>
+<div id="playoffs" class="row gy-3"></div>
+
+<h2>Final Standings</h2>
+<div class="table-responsive">
+<table id="finalStandings" class="table table-bordered table-striped table-sm"></table>
+</div>
+-->
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script>
+// 🔑 Replace with your Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyDYvq9eXpYplV4qp65G106LJfHaBoPF23o",
+  authDomain: "pedalschedule.firebaseapp.com",
+  databaseURL: "https://pedalschedule-default-rtdb.firebaseio.com",
+  projectId: "pedalschedule",
+  storageBucket: "pedalschedule.firebasestorage.app",
+  messagingSenderId: "46444074383",
+  appId: "1:46444074383:web:4351f250d95fac4378a7fa",
+  measurementId: "G-14CKBVRF1L"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// Team badge mapping
+function teamBadge(name){
+  const map = {
+    "Fawad & AR":"team-A",
+    "Rauf & Saqib":"team-B",
+    "Usman & Atif":"team-C",
+    "Mohsin & Imad":"team-D",
+    "Hanan & Ahmed":"team-E"
+  };
+  const cls = map[name] || "bg-secondary";
+  return `<span class="team-badge ${cls}"><i class="bi bi-people-fill"></i>${name}</span>`;
+}
+
+// ---- Render Fixtures ----
+function renderFixtures(data){
+  const container = document.getElementById("fixtures"); container.innerHTML="";
+  data.forEach((f,i)=>{
+    const col = document.createElement("div"); col.className="col-12";
+    col.innerHTML = `
+      <div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center flex-wrap">
+          <div class="mb-2">${teamBadge(f.teamA)} <span class="mx-1">vs</span> ${teamBadge(f.teamB)}</div>
+          <div class="d-flex gap-2">
+            <input type="number" class="form-control score-input" id="scoreA-${i}" value="${f.scoreA}">
+            <input type="number" class="form-control score-input" id="scoreB-${i}" value="${f.scoreB}">
+            <button class="btn btn-sm btn-primary" onclick="updateFixture(${i})">Save</button>
+          </div>
+        </div>
+        <div class="mt-2 text-muted"><i class="bi bi-trophy"></i> Winner: ${f.winner || "-"}</div>
+      </div>`;
+    container.appendChild(col);
+  });
+}
+
+// ---- Update Fixture ----
+function updateFixture(i){
+  db.ref("fixtures").once("value").then(snap=>{
+    const fixtures = snap.val();
+    const f = fixtures[i];
+    f.scoreA = parseInt(document.getElementById("scoreA-"+i).value) || 0;
+    f.scoreB = parseInt(document.getElementById("scoreB-"+i).value) || 0;
+    f.winner = f.scoreA>f.scoreB ? f.teamA : (f.scoreB>f.scoreA ? f.teamB : "Draw");
+    db.ref("fixtures/"+i).set(f);
+    recalcStandings();
+  });
+}
+
+// ---- Recalculate Standings ----
+function recalcStandings(){
+  db.ref("/").once("value").then(snap=>{
+    const data = snap.val();
+    const standings = {};
+    data.standings.forEach(t => {
+      standings[t.team] = {team: t.team, wins:0, losses:0, points:0, pointsFor:0, pointsAgainst:0};
+    });
+    data.fixtures.forEach(f=>{
+      if(f.scoreA===0 && f.scoreB===0) return;
+      const tA = standings[f.teamA], tB = standings[f.teamB];
+      tA.pointsFor += f.scoreA; tA.pointsAgainst += f.scoreB;
+      tB.pointsFor += f.scoreB; tB.pointsAgainst += f.scoreA;
+      if(f.scoreA>f.scoreB){ tA.wins++; tB.losses++; } 
+      else if(f.scoreB>f.scoreA){ tB.wins++; tA.losses++; }
+    });
+    let updated = Object.values(standings).map(t=>({...t, points:t.wins*2}));
+    updated.sort((a,b)=>b.wins-a.wins||(b.pointsFor-b.pointsAgainst)-(a.pointsFor-a.pointsAgainst));
+    db.ref("standings").set(updated).then(updatePlayoffs);
+  });
+}
+
+// ---- Update Playoffs ----
+function updatePlayoffs(){
+  db.ref("standings").once("value").then(snap=>{
+    const s = snap.val(); if(!s||s.length<4) return;
+    const top2 = s.slice(0,2), bottom2 = s.slice(2,4);
+    const playoffs = [
+      {stage:"Qualifier", team1:top2[0].team, team2:top2[1].team, score1:0, score2:0, winner:""},
+      {stage:"Eliminator 1", team1:bottom2[0].team, team2:bottom2[1].team, score1:0, score2:0, winner:""},
+      {stage:"Eliminator 2", team1:"Loser of Qualifier", team2:"Winner of Eliminator 1", score1:0, score2:0, winner:""},
+      {stage:"Final", team1:"Winner of Qualifier", team2:"Winner of Eliminator 2", score1:0, score2:0, winner:""}
+    ];
+    db.ref("playoffs").set(playoffs);
+  });
+}
+
+// ---- Render Standings ----
+function renderStandings(data){
+  const tbl = document.getElementById("standings");
+  tbl.innerHTML = "<tr><th>Rank</th><th>Team</th><th>W</th><th>L</th><th>Pts</th><th>PF</th><th>PA</th></tr>";
+  data.forEach((t,i)=>{ tbl.innerHTML += `<tr><td>${i+1}</td><td>${teamBadge(t.team)}</td><td>${t.wins}</td><td>${t.losses}</td><td>${t.points}</td><td>${t.pointsFor}</td><td>${t.pointsAgainst}</td></tr>`; });
+}
+
+// ---- Render Playoffs ----
+function renderPlayoffs(data){
+  const container = document.getElementById("playoffs"); container.innerHTML="";
+  data.forEach((p,i)=>{
+    const col = document.createElement("div"); col.className="col-12";
+    col.innerHTML = `<div class="card p-3"><div><b>${p.stage}</b>: ${teamBadge(p.team1)} vs ${teamBadge(p.team2)}</div>
+    <div class="d-flex gap-2 mt-2">
+    <input type="number" class="form-control score-input" id="p1-${i}" value="${p.score1}">
+    <input type="number" class="form-control score-input" id="p2-${i}" value="${p.score2}">
+    <button class="btn btn-sm btn-primary" onclick="updatePlayoff(${i})">Save</button>
+    </div><div class="mt-2 text-muted">Winner: ${p.winner||"-"}</div></div>`;
+    container.appendChild(col);
+  });
+}
+
+// ---- Update Playoff ----
+function updatePlayoff(i){
+  db.ref("playoffs").once("value").then(snap=>{
+    const playoffs = snap.val();
+    const p = playoffs[i];
+    p.score1 = parseInt(document.getElementById("p1-"+i).value)||0;
+    p.score2 = parseInt(document.getElementById("p2-"+i).value)||0;
+    if(p.score1>p.score2) p.winner=p.team1;
+    else if(p.score2>p.score1) p.winner=p.team2;
+    else p.winner="Draw";
+    db.ref("playoffs/"+i).set(p).then(updateFinalStandings);
+  });
+}
+
+// ---- Update Final Standings ----
+function updateFinalStandings(){
+  db.ref("playoffs").once("value").then(snap=>{
+    const p = snap.val(); if(!p) return;
+    const finals = [];
+    const q=p.find(x=>x.stage==="Qualifier"),
+          e1=p.find(x=>x.stage==="Eliminator 1"),
+          e2=p.find(x=>x.stage==="Eliminator 2"),
+          f=p.find(x=>x.stage==="Final");
+    if(e1 && e1.winner){ const loser = e1.team1===e1.winner ? e1.team2:e1.team1; finals.push({rank:4,team:loser}); }
+    if(e2 && e2.winner){ const loser = e2.team1===e2.winner ? e2.team2:e2.team1; finals.push({rank:3,team:loser}); }
+    if(f && f.winner){ const loser = f.team1===f.winner? f.team2:f.team1; finals.push({rank:2,team:loser}); finals.push({rank:1,team:f.winner}); }
+    db.ref("finalStandings").set(finals);
+  });
+}
+
+// ---- Render Final Standings ----
+function renderFinalStandings(data){
+  const tbl = document.getElementById("finalStandings");
+  tbl.innerHTML="<tr><th>Rank</th><th>Team</th></tr>";
+  data.forEach(r=>{ tbl.innerHTML+=`<tr><td>${r.rank}</td><td>${teamBadge(r.team)}</td></tr>`; });
+}
+
+// ---- Live Listeners ----
+db.ref("fixtures").on("value", s=>renderFixtures(s.val()||[]));
+db.ref("standings").on("value", s=>renderStandings(s.val()||[]));
+//db.ref("playoffs").on("value", s=>renderPlayoffs(s.val()||[]));
+//db.ref("finalStandings").on("value", s=>renderFinalStandings(s.val()||[]));
+</script>
+</body>
+</html>
