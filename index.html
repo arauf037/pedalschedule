@@ -1,64 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Padel Tournament Viewer</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-<style>
-body { background: #f8f9fa; font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; }
-h1,h2 { text-align:center; margin:20px 0; }
-.card { border-radius: 1rem; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
-.team-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:10px; font-weight:600; color:#fff; }
-.team-A { background:#304d6d; }
-.team-B { background:#a67045; }
-.team-C { background:#a2ce3c; }
-.team-D { background:#198754; }
-.team-E { background:#d68a30; }
-table th { background:#212529; color:#fff; }
-@media (max-width:576px) { table th, table td { font-size:0.85rem; padding:4px; } }
-.rules { font-size:0.95rem; background:#fff; border-radius:12px; padding:10px; box-shadow:0 1px 5px rgba(0,0,0,0.1); margin-bottom:15px; }
-</style>
+  <meta charset="UTF-8">
+  <title>Padel Tournament - View</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background:#f8f9fa; }
+    .live-badge {
+      background: red; color: white;
+      padding: 0.3rem 0.6rem; border-radius: 5px;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 50% { opacity: 0.3; } }
+  </style>
 </head>
-<body>
-<div class="container my-3">
-<h1>🏆 Padel Tournament</h1>
+<body class="container py-3">
+  <h1 class="text-center mb-4">🏆 Padel Tournament</h1>
 
-<div class="rules">
-<h5>Rules:</h5>
-<ul>
-<li><b>Round-robin</b>: All 5 teams play each other once.</li>
-<li><b>15 points match</b>. First team to reach 15+gamepoint will win.</li>
-<li><b>Top 2</b> teams qualify for finals.</li>
-<li><b>In case of same number of wins</b>: ranking will be deccided based on points difference </li>
-<li><b>Points Difference: </b>Total points scored - Total points conceded </li>
-<li><b>In case of same points differencce</b>: Head to head match result + points difference between teams will decide the ranking.</li>
-</ul>
-</div>
+  <!-- Rules -->
+  <div class="card mb-4">
+    <div class="card-header">Tournament Rules</div>
+    <div class="card-body">
+      <ul>
+        <li>6 teams, complete round robin league</li>
+        <li>Games to <b>15 points</b></li>
+        <li>Winner = Top of the table</li>
+        <li>Tie-break:
+          <ol>
+            <li>Most Wins</li>
+            <li>Points Difference (PF - PA)</li>
+            <li>Head-to-Head</li>
+            <li>If still tied → Joint Champions 🎉</li>
+          </ol>
+        </li>
+      </ul>
+    </div>
+  </div>
 
-<h2>Fixtures</h2>
-<div id="fixtures" class="row gy-3"></div>
+  <!-- Live Match -->
+  <div class="card mb-4" id="liveMatchCard" style="display:none;">
+    <div class="card-body">
+      <h5><span class="live-badge">LIVE</span> <span id="liveMatchTitle"></span></h5>
+    </div>
+  </div>
 
-<h2>Standings</h2>
-<div class="table-responsive">
-<table id="standings" class="table table-bordered table-striped table-sm"></table>
-</div>
-<!--
-<h2>Playoffs</h2>
-<div id="playoffs" class="row gy-3"></div>
+  <!-- Fixtures -->
+  <div class="card mb-4">
+    <div class="card-header">Fixtures & Results</div>
+    <div class="table-responsive">
+      <table class="table table-striped mb-0" id="fixturesTable">
+        <thead>
+          <tr>
+            <th>Match #</th><th>Court</th><th>Team A</th><th>Score</th><th>Team B</th><th>Score</th><th>Winner</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
 
-<h2>Final Standings</h2>
-<div class="table-responsive">
-<table id="finalStandings" class="table table-bordered table-striped table-sm"></table>
-</div>
--->
-</div>
+  <!-- Standings -->
+  <div class="card mb-4">
+    <div class="card-header">Standings</div>
+    <div class="table-responsive">
+      <table class="table table-bordered mb-0" id="standingsTable">
+        <thead>
+          <tr>
+            <th>Rank</th><th>Team</th><th>W</th><th>L</th><th>PF</th><th>PA</th><th>Diff</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
 
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-<script>
-// 🔑 Replace with your Firebase config
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script>
 const firebaseConfig = {
   apiKey: "AIzaSyDYvq9eXpYplV4qp65G106LJfHaBoPF23o",
   authDomain: "pedalschedule.firebaseapp.com",
@@ -69,51 +89,68 @@ const firebaseConfig = {
   appId: "1:46444074383:web:4351f250d95fac4378a7fa",
   measurementId: "G-14CKBVRF1L"
 };
-firebase.initializeApp(firebaseConfig);
-const db=firebase.database();
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-function teamBadge(name){
-const map={"Fawad & AR":"team-A","Rauf & Saqib":"team-B","Usman & Atif":"team-C","Mohsin & Imad":"team-D","Hanan & Ahmed":"team-E"};
-const cls=map[name]||"bg-secondary"; return `<span class="team-badge ${cls}"><i class="bi bi-people-fill"></i>${name}</span>`;
-}
+    function renderFixtures(fixtures, liveMatches) {
+      const tbody = document.querySelector("#fixturesTable tbody");
+      tbody.innerHTML = "";
 
-// ---- Render functions ----
-function renderFixtures(data){
-const container=document.getElementById("fixtures"); container.innerHTML="";
-data.forEach(f=>{
+      // Live section
+      const card = document.getElementById("liveMatchCard");
+      card.innerHTML = "";
+      if (liveMatches && liveMatches.length > 0) {
+        liveMatches.forEach(num => {
+          const m = fixtures.find(f => f.matchNo === num);
+          if (m) {
+            const div = document.createElement("div");
+            div.className = "card mb-3";
+            div.innerHTML = `
+              <div class="card-body">
+                <h5><span class="live-badge">LIVE</span> Match #${m.matchNo} (Court ${m.court}): 
+                ${m.teamA} vs ${m.teamB} | ${m.scoreA} - ${m.scoreB}</h5>
+              </div>`;
+            card.appendChild(div);
+          }
+        });
+        card.style.display = "block";
+      } else {
+        card.style.display = "none";
+      }
 
-const col=document.createElement("div"); col.className="col-12";
-col.innerHTML=`<div class="card p-3">${teamBadge(f.teamA)} <span class="mx-1">vs</span> ${teamBadge(f.teamB)} <br> Winner: ${f.winner||"-"} | Score: ${f.scoreA}-${f.scoreB}</div>`;
-container.appendChild(col);
-});
-}
+      // Fixtures
+      fixtures.forEach(m => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${m.matchNo}</td><td>${m.court}</td>
+            <td>${m.teamA}</td><td>${m.scoreA}</td>
+            <td>${m.teamB}</td><td>${m.scoreB}</td>
+            <td>${m.winner || "-"}</td>
+          </tr>`;
+      });
+    }
 
-function renderStandings(data){
-const tbl=document.getElementById("standings");
-tbl.innerHTML="<tr><th>Rank</th><th>Team</th><th>W</th><th>L</th><th>Pts</th><th>PF</th><th>PA</th></tr>";
-data.forEach((t,i)=>{tbl.innerHTML+=`<tr><td>${i+1}</td><td>${teamBadge(t.team)}</td><td>${t.wins}</td><td>${t.losses}</td><td>${t.points}</td><td>${t.pointsFor}</td><td>${t.pointsAgainst}</td></tr>`});
-}
+    function renderStandings(data) {
+      const tbody = document.querySelector("#standingsTable tbody");
+      tbody.innerHTML = "";
+      data.forEach((t,i) => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${i+1}</td><td>${t.team}</td>
+            <td>${t.wins}</td><td>${t.losses}</td>
+            <td>${t.pointsFor}</td><td>${t.pointsAgainst}</td>
+            <td>${t.pointsFor - t.pointsAgainst}</td>
+          </tr>`;
+      });
+    }
 
-function renderPlayoffs(data){
-const container=document.getElementById("playoffs"); container.innerHTML="";
-data.forEach(p=>{
-const col=document.createElement("div"); col.className="col-12";
-col.innerHTML=`<div class="card p-3"><b>${p.stage}</b>: ${teamBadge(p.team1)} vs ${teamBadge(p.team2)} | Winner: ${p.winner||"-"} | Score: ${p.score1}-${p.score2}</div>`;
-container.appendChild(col);
-});
-}
-
-function renderFinalStandings(data){
-const tbl=document.getElementById("finalStandings");
-tbl.innerHTML="<tr><th>Rank</th><th>Team</th></tr>";
-data.forEach(r=>{tbl.innerHTML+=`<tr><td>${r.rank}</td><td>${teamBadge(r.team)}</td></tr>`});
-}
-
-// ---- Live Listeners ----
-db.ref("fixtures").on("value", s=>renderFixtures(s.val()||[]));
-db.ref("standings").on("value", s=>renderStandings(s.val()||[]));
-//db.ref("playoffs").on("value", s=>renderPlayoffs(s.val()||[]));
-//db.ref("finalStandings").on("value", s=>renderFinalStandings(s.val()||[]));
-</script>
+    db.ref("fixtures").on("value", snap => {
+      const fixtures = snap.val() || [];
+      db.ref("liveMatches").once("value").then(lsnap => {
+        renderFixtures(fixtures, lsnap.val() || []);
+      });
+    });
+    db.ref("standings").on("value", snap => renderStandings(snap.val() || []));
+  </script>
 </body>
 </html>
