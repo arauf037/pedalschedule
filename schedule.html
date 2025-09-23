@@ -2,35 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Padel Admin Panel</title>
+  <title>Admin Panel - Tournament</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
-    body { background:#f8f9fa; }
-    .live-btn { background:red; color:white; }
+    body {
+      font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+      background-color: #f9f9f9;
+    }
+    .team-A { background:#304d6d; color:#fff; }
+    .team-B { background:#a67045; color:#fff; }
+    .team-C { background:#a2ce3c; color:#fff; }
+    .team-D { background:#198754; color:#fff; }
+    .team-E { background:#d68a30; color:#fff; }
+    .team-F { background:#6f42c1; color:#fff; }
+    .live-badge {
+      background: red;
+      color: #fff;
+      font-weight: bold;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink {
+      50% { opacity: 0.4; }
+    }
   </style>
 </head>
-<body class="container py-4">
-  <h1 class="text-center mb-4">Admin Panel - Padel Tournament</h1>
+<body class="container py-3">
 
-  <div id="fixtures"></div>
+  <h2 class="text-center mb-4">🏐 Tournament Admin Panel</h2>
 
-  <h2 class="mt-5">Standings</h2>
-  <table class="table table-striped" id="standingsTable">
-    <thead>
+  <div id="fixtures" class="mb-5"></div>
+
+  <h4 class="mb-3">📊 Standings</h4>
+  <table class="table table-bordered table-striped text-center">
+    <thead class="table-dark">
       <tr>
-        <th>Team</th><th>Wins</th><th>Losses</th><th>PF</th><th>PA</th><th>Diff</th>
+        <th>Team</th>
+        <th>W</th>
+        <th>L</th>
+        <th>PF</th>
+        <th>PA</th>
+        <th>+/-</th>
       </tr>
     </thead>
-    <tbody></tbody>
+    <tbody id="standings"></tbody>
   </table>
 
   <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
   <script>
-    // 🔑 Replace with your Firebase Config
-const firebaseConfig = {
+    // 🔹 Your Firebase config
+  const firebaseConfig = {
   apiKey: "AIzaSyDYvq9eXpYplV4qp65G106LJfHaBoPF23o",
   authDomain: "pedalschedule.firebaseapp.com",
   databaseURL: "https://pedalschedule-default-rtdb.firebaseio.com",
@@ -43,101 +68,162 @@ const firebaseConfig = {
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    function renderFixtures(fixtures) {
+    // 🔹 Render Fixtures
+    function renderFixtures(data) {
       const container = document.getElementById("fixtures");
-      container.innerHTML = "";
-
-      fixtures.forEach(match => {
+      container.innerHTML = "<h4 class='mb-3'>🗓 Fixtures</h4>";
+      data.fixtures.forEach(match => {
         const div = document.createElement("div");
         div.className = "card mb-3";
         div.innerHTML = `
           <div class="card-body">
-            <h5>Match #${match.matchNo} (Court ${match.court}): ${match.teamA} vs ${match.teamB}</h5>
-            <div class="row g-2">
+            <h6>Match ${match.id} - Court ${match.court} 
+              ${match.live ? "<span class='badge live-badge'>LIVE</span>" : ""}
+            </h6>
+            <div class="row">
+              <div class="col-5 text-center p-2 ${getTeamClass(match.teamA)}">${match.teamA}</div>
+              <div class="col-2 text-center">vs</div>
+              <div class="col-5 text-center p-2 ${getTeamClass(match.teamB)}">${match.teamB}</div>
+            </div>
+            <div class="row mt-2">
               <div class="col">
-                <input type="number" class="form-control scoreA" value="${match.scoreA}" placeholder="Score A">
+                <input type="number" id="scoreA-${match.id}" class="form-control" placeholder="Score A" value="${match.scoreA}">
               </div>
               <div class="col">
-                <input type="number" class="form-control scoreB" value="${match.scoreB}" placeholder="Score B">
-              </div>
-              <div class="col">
-                <button class="btn btn-success save-btn">Save</button>
-                <button class="btn live-btn">Live</button>
+                <input type="number" id="scoreB-${match.id}" class="form-control" placeholder="Score B" value="${match.scoreB}">
               </div>
             </div>
-          </div>`;
+            <div class="mt-2">
+              <button class="btn btn-success btn-sm" onclick="updateMatch(${match.id})">Update</button>
+              <button class="btn btn-danger btn-sm" onclick="resetMatch(${match.id})">Reset</button>
+              <button class="btn btn-warning btn-sm" onclick="toggleLive(${match.id})">${match.live ? "Unset Live" : "Set Live"}</button>
+            </div>
+          </div>
+        `;
         container.appendChild(div);
-
-        // Save button
-        div.querySelector(".save-btn").onclick = () => {
-          const scoreA = parseInt(div.querySelector(".scoreA").value) || 0;
-          const scoreB = parseInt(div.querySelector(".scoreB").value) || 0;
-          let winner = "";
-          if (scoreA > scoreB) winner = match.teamA;
-          else if (scoreB > scoreA) winner = match.teamB;
-
-          db.ref("fixtures/" + (match.matchNo-1)).update({ scoreA, scoreB, winner });
-          updateStandings(match, scoreA, scoreB, winner);
-        };
-
-        // Live button
-        div.querySelector(".live-btn").onclick = () => {
-          db.ref("liveMatches").once("value").then(snap => {
-            let live = snap.val() || [];
-            const alreadyLive = live.includes(match.matchNo);
-
-            if (alreadyLive) {
-              // Unmark live
-              live = live.filter(m => m !== match.matchNo);
-            } else {
-              if (live.length >= 2) {
-                alert("⚠️ Only 2 matches can be live at once!");
-                return;
-              }
-              live.push(match.matchNo);
-            }
-            db.ref("liveMatches").set(live);
-          });
-        };
       });
     }
 
-    function updateStandings(match, scoreA, scoreB, winner) {
-      db.ref("standings").once("value").then(snap => {
-        const standings = snap.val();
-        const teamA = standings.find(t => t.team === match.teamA);
-        const teamB = standings.find(t => t.team === match.teamB);
+    function getTeamClass(name) {
+      if (name.includes("Fawad")) return "team-A";
+      if (name.includes("Rauf")) return "team-B";
+      if (name.includes("Usman")) return "team-C";
+      if (name.includes("Mohsin")) return "team-D";
+      if (name.includes("Hanan")) return "team-E";
+      if (name.includes("Zaheer")) return "team-F";
+      return "";
+    }
 
-        teamA.pointsFor += scoreA;
-        teamA.pointsAgainst += scoreB;
-        teamB.pointsFor += scoreB;
-        teamB.pointsAgainst += scoreA;
+    // 🔹 Update Match
+    function updateMatch(id) {
+      db.ref("fixtures").once("value", snapshot => {
+        const fixtures = snapshot.val();
+        const match = fixtures.find(m => m.id === id);
 
-        if (winner === match.teamA) { teamA.wins++; teamB.losses++; }
-        else if (winner === match.teamB) { teamB.wins++; teamA.losses++; }
+        const scoreA = parseInt(document.getElementById(`scoreA-${id}`).value) || 0;
+        const scoreB = parseInt(document.getElementById(`scoreB-${id}`).value) || 0;
+
+        match.scoreA = scoreA;
+        match.scoreB = scoreB;
+        match.winner = scoreA === scoreB ? "" : (scoreA > scoreB ? match.teamA : match.teamB);
+
+        db.ref("fixtures").set(fixtures);
+
+        updateStandingsFromFixtures(fixtures);
+      });
+    }
+
+    // 🔹 Reset Match
+    function resetMatch(id) {
+      db.ref("fixtures").once("value", snapshot => {
+        const fixtures = snapshot.val();
+        const match = fixtures.find(m => m.id === id);
+
+        match.scoreA = 0;
+        match.scoreB = 0;
+        match.winner = "";
+
+        db.ref("fixtures").set(fixtures);
+        updateStandingsFromFixtures(fixtures);
+      });
+    }
+
+    // 🔹 Toggle Live (max 2)
+    function toggleLive(id) {
+      db.ref("fixtures").once("value", snapshot => {
+        const fixtures = snapshot.val();
+        let liveCount = fixtures.filter(m => m.live).length;
+
+        const match = fixtures.find(m => m.id === id);
+        if (!match.live && liveCount >= 2) {
+          alert("⚠ Only 2 matches can be live at a time!");
+          return;
+        }
+        match.live = !match.live;
+
+        db.ref("fixtures").set(fixtures);
+      });
+    }
+
+    // 🔹 Standings Calculation
+    function updateStandingsFromFixtures(fixtures) {
+      db.ref("standings").once("value", snapshot => {
+        let standings = snapshot.val();
+
+        // Reset
+        standings.forEach(t => {
+          t.wins = 0; t.losses = 0; t.pf = 0; t.pa = 0; t.diff = 0;
+        });
+
+        fixtures.forEach(m => {
+          if (m.scoreA === 0 && m.scoreB === 0) return;
+
+          let teamA = standings.find(t => t.team === m.teamA);
+          let teamB = standings.find(t => t.team === m.teamB);
+
+          teamA.pf += m.scoreA;
+          teamA.pa += m.scoreB;
+          teamB.pf += m.scoreB;
+          teamB.pa += m.scoreA;
+
+          if (m.scoreA > m.scoreB) { teamA.wins++; teamB.losses++; }
+          else if (m.scoreB > m.scoreA) { teamB.wins++; teamA.losses++; }
+
+          teamA.diff = teamA.pf - teamA.pa;
+          teamB.diff = teamB.pf - teamB.pa;
+        });
 
         db.ref("standings").set(standings);
       });
     }
 
+    // 🔹 Render Standings
     function renderStandings(data) {
-      const tbody = document.querySelector("#standingsTable tbody");
+      const tbody = document.getElementById("standings");
       tbody.innerHTML = "";
+      data.sort((a,b) => b.wins - a.wins || b.diff - a.diff);
       data.forEach(t => {
         tbody.innerHTML += `
           <tr>
             <td>${t.team}</td>
             <td>${t.wins}</td>
             <td>${t.losses}</td>
-            <td>${t.pointsFor}</td>
-            <td>${t.pointsAgainst}</td>
-            <td>${t.pointsFor - t.pointsAgainst}</td>
+            <td>${t.pf}</td>
+            <td>${t.pa}</td>
+            <td>${t.diff}</td>
           </tr>`;
       });
     }
 
-    db.ref("fixtures").on("value", snap => renderFixtures(snap.val() || []));
-    db.ref("standings").on("value", snap => renderStandings(snap.val() || []));
+    // 🔹 Live Sync
+    db.ref("fixtures").on("value", snapshot => {
+      const fixtures = snapshot.val();
+      renderFixtures({ fixtures });
+    });
+
+    db.ref("standings").on("value", snapshot => {
+      renderStandings(snapshot.val());
+    });
   </script>
 </body>
 </html>
