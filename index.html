@@ -111,6 +111,7 @@
       const hasClass = teamClasses[name] || false;
       if (!hasClass) {
         teamClasses[name] = `team-${indicator}`;
+        indicator++;
       }
       return teamClasses[name];
       /*if (name.includes("Fawad")) return "team-A";
