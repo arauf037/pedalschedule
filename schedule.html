@@ -17,6 +17,17 @@
     .team-D { background:#198754; color:#fff; }
     .team-E { background:#d68a30; color:#fff; }
     .team-F { background:#6f42c1; color:#fff; }
+        .team-0 { background: #304d6d; color: #fff; }  /* Deep blue-gray */
+.team-1 { background: #a67045; color: #fff; }  /* Bronze brown */
+.team-2 { background: #a2ce3c; color: #fff; }  /* Fresh lime green */
+.team-3 { background: #198754; color: #fff; }  /* Emerald green */
+.team-4 { background: #d68a30; color: #fff; }  /* Warm orange */
+.team-5 { background: #6f42c1; color: #fff; }  /* Purple */
+.team-6 { background: #007bff; color: #fff; }  /* Classic blue */
+.team-7 { background: #dc3545; color: #fff; }  /* Bright crimson */
+.team-8 { background: #17a2b8; color: #fff; }  /* Cyan-teal */
+.team-9 { background: #fd7e14; color: #fff; }  /* Vibrant orange */
+.team-10 { background: #20c997; color: #fff; } /* Mint green */
     .live-badge {
       background: red;
       color: #fff;
@@ -103,8 +114,16 @@
         container.appendChild(div);
       });
     }
-
+    var teamClasses = {};
+    var indicator = 0;
+    // 🔹 Helper: get team class
     function getTeamClass(name) {
+      const hasClass = teamClasses[name] || false;
+      if (!hasClass) {
+        teamClasses[name] = `team-${indicator}`;
+        indicator++;
+      }
+      return teamClasses[name];
      
       if (name.includes("Fawad")) return "team-A";
       if (name.includes("Rauf")) return "team-B";
