@@ -104,8 +104,8 @@
 };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    let teamsClasses = {};
-    let indicator = 0;
+    var teamsClasses = {};
+    var indicator = 0;
     // 🔹 Helper: get team class
     function getTeamClass(name) {
       const hasClass = teamClasses[name] || false;
